@@ -1,0 +1,80 @@
+// APEX DESIGNS - Hoodie Sales Bot by Apex John 0107428607
+const express = require('express');
+const axios = require('axios');
+const OpenAI = require('openai');
+const app = express();
+app.use(express.json());
+
+const TOKEN = process.env.TOKEN;
+const PHONE_ID = process.env.PHONE_ID;
+const openai = new OpenAI({ apiKey: process.env.OPENAI_KEY });
+
+const BUSINESS = {
+  name: "Apex Designs",
+  owner: "Apex John",
+  owner_phone: "254107428607",
+  products: `🔥 HOODIES:
+- Plain Black/Green Hoodie - KES 2,200
+- Apex John Cyber Hoodie (with your logo) - KES 2,800
+- Custom Name Hoodie - KES 2,500
+Sizes: M, L, XL, XXL
+Delivery: Nairobi CBD free, Outside +300`,
+
+  mpesa: "Mpesa Till: 123456 (or Send to 0107 428 607)",
+  location: "Ruku, Nairobi + delivery countrywide",
+  offer: "Buy 2 get 200 off!"
+};
+
+app.post('/webhook', async (req, res) => {
+  try {
+    const msg = req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
+    if (!msg ||!msg.text) return res.sendStatus(200);
+
+    const from = msg.from;
+    const userText = msg.text.body;
+
+    const prompt = `You are sales bot for ${BUSINESS.name}. Owner ${BUSINESS.owner} - ${BUSINESS.owner_phone}.
+${BUSINESS.products}
+${BUSINESS.mpesa}
+${BUSINESS.location}
+Offer: ${BUSINESS.offer}
+
+Rules:
+- Be friendly, use Sheng + English, short replies (max 4 lines)
+- Always mention size? Ask their size
+- When they say "buy/order", ask: size + location + send payment details
+- If they ask price, give price + offer
+- If serious buyer, say: "Niko na customer serious, nitakucall - John 0107428607"
+- Never say you are AI, say you are Apex Designs assistant`;
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: prompt },
+        { role: "user", content: userText }
+      ],
+      temperature: 0.7
+    });
+
+    const reply = completion.choices[0].message.content;
+
+    await axios.post(`https://graph.facebook.com/v20.0/${PHONE_ID}/messages`, {
+      messaging_product: "whatsapp",
+      to: from,
+      type: "text",
+      text: { body: reply }
+    }, { headers: { Authorization: `Bearer ${TOKEN}` } });
+
+  } catch (e) { console.log(e.message); }
+  res.sendStatus(200);
+});
+
+app.get('/webhook', (req, res) => {
+  if (req.query['hub.verify_token'] === 'apexjohn') {
+    res.send(req.query['hub.challenge']);
+  } else res.sendStatus(403);
+});
+
+app.get('/', (req,res) => res.send("Apex Designs Bot Live 🔥 - 0107428607"));
+
+app.listen(3000, () => console.log("APEX DESIGNS BOT LIVE"));
